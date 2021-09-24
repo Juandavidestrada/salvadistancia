@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.db.models.signals import pre_save
+from django.shortcuts import reverse
 from django.utils.text import slugify
 
 User = get_user_model()
@@ -26,6 +27,18 @@ class Address(models.Model):
     class Meta:
         verbose_name_plural = 'Addresses'
 
+class ColourVariation(models.Model):
+    name = models.CharField(max_length=50)
+
+    def __str__(self):
+        return self.name
+
+
+class SizeVariation(models.Model):
+    name = models.CharField(max_length=50)
+
+    def __str__(self):
+        return self.name
 
 class Product(models.Model):
     title = models.CharField(max_length=150)
@@ -35,9 +48,18 @@ class Product(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
     active = models.BooleanField(default=False)
+    price = models.IntegerField(default=0)
+    available_colours = models.ManyToManyField(ColourVariation)
+    available_sizes = models.ManyToManyField(SizeVariation)
 
     def __str__(self):
         return self.title
+
+    def get_absolute_url(self):
+        return reverse("cart:product-detail", kwargs={'slug': self.slug})
+    
+    def get_price(self):
+        return "{:.2f}".format(self.price / 100)
 
 
 class OrderItem(models.Model):
@@ -45,13 +67,23 @@ class OrderItem(models.Model):
         "Order", related_name='items', on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
+    colour = models.ForeignKey(ColourVariation, on_delete=models.CASCADE)
+    size = models.ForeignKey(SizeVariation, on_delete=models.CASCADE)
 
     def __str__(self):
         return f"{self.quantity} x {self.product.title}"
+    
+    def get_raw_total_item_price(self):
+        return self.quantity * self.product.price
+
+    def get_total_item_price(self):
+        price = self.get_raw_total_item_price()  # 1000
+        return "{:.2f}".format(price / 100)
 
 
 class Order(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        User, blank=True, null=True, on_delete=models.CASCADE)    
     start_date = models.DateTimeField(auto_now_add=True)
     ordered_date = models.DateTimeField(blank=True, null=True)
     ordered = models.BooleanField(default=False)
